@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prisma Relations: How Tables Become Friends</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EAF1FF; --surface:#FFFFFF; --surface2:#F1F4FC; --ink:#1D2045; --muted:#596084; --line:#CDD6EE;
+  --one:#10A08F; --one-soft:#D3F4EE; --many:#F2A20C; --many-soft:#FFEFC8; --mn:#8B5CF6; --mn-soft:#ECE3FF;
+  --pink:#EC4899; --pink-soft:#FCE1F0; --bad:#E5484D; --bad-soft:#FFE3E3; --good:#1E9E5E; --good-soft:#D9F5E5;
+  --skin1:#F5C9A3; --skin2:#C98E62; --skin3:#E8B48A;
+  --code-bg:#1B1F42; --code-ink:#E9ECFF; --code-muted:#8A91BF;
+  --shadow:4px 4px 0 var(--ink);
+  --display:"Fredoka","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  --body:"Nunito","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12152E; --surface:#1C2042; --surface2:#252A55; --ink:#EEF0FF; --muted:#A3A9D1; --line:#343A6B;
+    --one:#37D1BC; --one-soft:#123F3B; --many:#FFC043; --many-soft:#43360F; --mn:#B095FF; --mn-soft:#30275C;
+    --pink:#FF7EBF; --pink-soft:#4A1E38; --bad:#FF7D80; --bad-soft:#4A2026; --good:#55DA95; --good-soft:#163F2A;
+    --code-bg:#0D1027; --shadow:4px 4px 0 #050714; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12152E; --surface:#1C2042; --surface2:#252A55; --ink:#EEF0FF; --muted:#A3A9D1; --line:#343A6B;
+  --one:#37D1BC; --one-soft:#123F3B; --many:#FFC043; --many-soft:#43360F; --mn:#B095FF; --mn-soft:#30275C;
+  --pink:#FF7EBF; --pink-soft:#4A1E38; --bad:#FF7D80; --bad-soft:#4A2026; --good:#55DA95; --good-soft:#163F2A;
+  --code-bg:#0D1027; --shadow:4px 4px 0 #050714; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-behavior:smooth; scroll-padding-top:calc(env(safe-area-inset-top,0px) + 76px)}
+body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:17.5px; line-height:1.6;
+  background-image:radial-gradient(var(--line) 1.2px, transparent 1.2px); background-size:26px 26px}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:10; background:var(--surface)}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:3px solid var(--pink); outline-offset:3px; border-radius:8px}
+code,.mono{font-family:var(--mono); font-size:.88em}
+p{max-width:68ch}
+h1,h2,h3,h4{font-family:var(--display); line-height:1.15; margin:0; font-weight:600}
+
+/* header */
+.top{position:sticky; top:env(safe-area-inset-top,0px); z-index:30; background:var(--surface); border-bottom:2.5px solid var(--ink)}
+.top-in{max-width:1180px; margin:0 auto; display:flex; align-items:center; gap:14px; padding:10px 18px}
+.brand{font-family:var(--display); font-weight:700; font-size:19px; text-decoration:none; color:inherit; white-space:nowrap}
+.nav{display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; flex:1; justify-content:center}
+.nav::-webkit-scrollbar{display:none}
+.nav a{white-space:nowrap; text-decoration:none; color:var(--muted); font-weight:700; font-size:14px; padding:5px 11px; border-radius:999px}
+.nav a.on,.nav a:hover{background:var(--ink); color:var(--surface)}
+.xp{display:flex; align-items:center; gap:8px; background:var(--pink-soft); border:2px solid var(--ink); border-radius:999px; padding:4px 12px 4px 6px; font-weight:800; white-space:nowrap}
+.xp .star{display:grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--many); font-size:14px}
+.xp.bump{animation:bump .5s}
+@keyframes bump{40%{transform:scale(1.18)}}
+.bar{height:5px; background:var(--surface2)}
+.bar i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--one),var(--many),var(--mn),var(--pink)); transition:width .15s}
+
+main{max-width:1180px; margin:0 auto; padding:0 18px 60px}
+.card{background:var(--surface); border:2.5px solid var(--ink); border-radius:20px; box-shadow:var(--shadow); padding:24px}
+.btn{border:2.5px solid var(--ink); background:var(--many); color:#1D2045; font-family:var(--display); font-weight:600; font-size:17px; padding:9px 18px; border-radius:14px; box-shadow:3px 3px 0 var(--ink); transition:transform .1s, box-shadow .1s}
+.btn:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink)}
+.btn:active{transform:translate(3px,3px); box-shadow:0 0 0 var(--ink)}
+.btn.alt{background:var(--surface); color:var(--ink)}
+.btn.mn{background:var(--mn); color:#fff}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+.muted{color:var(--muted)}
+.g2{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px}
+.g3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px}
+
+/* hero */
+.hero{padding:44px 0 10px; text-align:center}
+.hero h1{font-size:clamp(42px,7.4vw,86px); font-weight:700; letter-spacing:-.01em; line-height:1}
+.hero h1 .w{display:inline-block; animation:hop .7s cubic-bezier(.3,1.6,.5,1) both}
+.hero p.sub{font-size:20px; color:var(--muted); margin:14px auto 0; max-width:46ch}
+@keyframes hop{from{opacity:0; transform:translateY(30px) rotate(-6deg)}to{opacity:1; transform:none}}
+.scene-wrap{margin-top:26px; padding:10px 10px 0; overflow:hidden}
+.scene-scroll{overflow-x:auto}
+.scene{display:block; width:100%; min-width:700px; height:auto}
+.scene text{font-family:var(--display); fill:var(--ink)}
+.scene .nm{font-size:15px; font-weight:600}
+.scene .tiny{font-family:var(--mono); font-size:10px; font-weight:600; fill:#1D2045}
+.scene .tag rect{stroke:var(--ink); stroke-width:2}
+.scene .tag text{font-size:13px; font-weight:600}
+.flow{fill:none; stroke-width:3.5; stroke-linecap:round; stroke-dasharray:2 9; animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-22}}
+.pop{transform-box:fill-box; transform-origin:center; animation:pop .6s cubic-bezier(.3,1.7,.5,1) both}
+@keyframes pop{from{opacity:0; transform:scale(.3)}to{opacity:1; transform:none}}
+.node{cursor:pointer}
+.node.hl .ring{opacity:1}
+.ring{opacity:0; fill:none; stroke:var(--pink); stroke-width:4; stroke-dasharray:6 6; transition:opacity .2s}
+.cap{display:flex; gap:14px; align-items:center; text-align:left; margin:6px 10px 16px; padding:14px 18px; border-radius:16px; background:var(--surface2); min-height:64px}
+.cap .em{font-size:30px}
+.legend{display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:18px}
+.pill{display:inline-flex; align-items:center; gap:8px; border:2px solid var(--ink); border-radius:999px; padding:4px 14px; font-weight:800; font-size:14.5px; background:var(--surface)}
+.pill i{width:12px; height:12px; border-radius:50%}
+
+/* levels */
+section{padding:70px 0 6px}
+.lvl{display:flex; gap:18px; align-items:center; margin-bottom:22px}
+.lvl-badge{flex:none; width:74px; height:74px; border-radius:22px; border:2.5px solid var(--ink); box-shadow:var(--shadow); display:grid; place-items:center; font-size:34px; background:var(--surface); transform:rotate(-5deg)}
+.lvl small{font-family:var(--display); font-weight:600; color:var(--pink); font-size:16px}
+.lvl h2{font-size:clamp(28px,4.2vw,42px)}
+.lvl p{margin:4px 0 0; color:var(--muted)}
+.speech{position:relative; background:var(--surface); border:2.5px solid var(--ink); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow)}
+.say{display:flex; gap:14px; align-items:flex-start; margin:16px 0}
+.say svg{flex:none}
+.say .speech::before{content:""; position:absolute; left:-12px; top:22px; width:18px; height:18px; background:var(--surface); border-left:2.5px solid var(--ink); border-bottom:2.5px solid var(--ink); transform:rotate(45deg)}
+.speech p{margin:0}
+.tip{border:2.5px dashed var(--mn); background:var(--mn-soft); border-radius:16px; padding:14px 18px; margin:18px 0}
+.tip p{margin:0}
+.tip b.h{font-family:var(--display); font-weight:600}
+
+/* L1 notebook */
+.notebook{background:var(--surface); border:2.5px solid var(--ink); border-radius:18px; box-shadow:var(--shadow); padding:20px 20px 20px 46px; position:relative; background-image:repeating-linear-gradient(transparent 0 33px, var(--line) 33px 35px)}
+.notebook::before{content:""; position:absolute; left:30px; top:0; bottom:0; width:2px; background:var(--pink); opacity:.6}
+table.nb{width:100%; border-collapse:collapse; font-size:16px}
+.nb th,.nb td{padding:5px 10px; text-align:left}
+.nb th{font-family:var(--display); font-weight:600; color:var(--muted)}
+.nb tr.dup td.n{background:var(--bad-soft); color:var(--bad); font-weight:800; border-radius:6px}
+.nb tr.shake{animation:shake .45s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.field{display:flex; flex-direction:column; gap:6px; font-weight:700; font-size:15px; margin-top:16px}
+input[type=text],select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface); border:2.5px solid var(--ink); border-radius:12px; padding:8px 12px}
+.big-count{font-family:var(--display); font-size:22px; font-weight:600; margin-top:10px}
+.big-count b{color:var(--bad); font-size:30px}
+.boxes{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:22px}
+.tbox{background:var(--surface); border:2.5px solid var(--ink); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
+.tbox h4{padding:8px 14px; font-size:17px; display:flex; gap:8px; align-items:center; border-bottom:2.5px solid var(--ink)}
+.tbox table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px}
+.tbox td,.tbox th{padding:6px 12px; border-top:1px solid var(--line); text-align:left}
+.tbox th{color:var(--muted); font-weight:600; border-top:0}
+.drop{animation:drop .6s cubic-bezier(.3,1.5,.5,1) both}
+@keyframes drop{from{opacity:0; transform:translateY(-40px) rotate(4deg)}to{opacity:1; transform:none}}
+
+/* L2 friendship cards */
+.fcard{background:var(--surface); border:2.5px solid var(--ink); border-radius:20px; box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column}
+.fcard .art{padding:10px; border-bottom:2.5px solid var(--ink)}
+.fcard svg{display:block; width:100%; height:auto}
+.fcard svg text{font-family:var(--display); fill:var(--ink)}
+.fcard .bd{padding:16px 18px 18px; display:flex; flex-direction:column; gap:8px; flex:1}
+.fcard h3{font-size:22px}
+.fcard .like{font-weight:800}
+.draw{stroke-dasharray:1; stroke-dashoffset:1; fill:none; stroke-width:3.5; stroke-linecap:round}
+.play .draw{animation:draw .9s ease forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.keybox{margin-top:auto; font-family:var(--mono); font-size:13.5px; background:var(--surface2); border-radius:10px; padding:8px 12px}
+
+/* sort game */
+.game{display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:22px; align-items:stretch; margin-top:26px}
+.scen{min-height:150px; display:flex; flex-direction:column; justify-content:center; text-align:center; font-family:var(--display); font-size:24px; font-weight:600}
+.scen .em{font-size:46px; display:block}
+.scen.in{animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+.buckets{display:grid; gap:12px}
+.bucket{display:flex; align-items:center; gap:14px; border:2.5px solid var(--ink); border-radius:16px; padding:12px 16px; background:var(--surface); box-shadow:3px 3px 0 var(--ink); text-align:left; font-family:var(--display); font-size:19px; font-weight:600}
+.bucket span.e{font-size:26px}
+.bucket.right{background:var(--good-soft); animation:bump .4s}
+.bucket.wrong{background:var(--bad-soft); animation:shake .4s}
+.dots{display:flex; gap:6px; justify-content:center; margin-top:14px}
+.dots i{width:12px; height:12px; border-radius:50%; background:var(--line); border:2px solid var(--ink)}
+.dots i.ok{background:var(--good)} .dots i.no{background:var(--bad)} .dots i.cur{background:var(--many)}
+.gfb{text-align:center; min-height:52px; margin-top:10px; font-weight:700}
+
+/* L3 sticky */
+.seg{display:inline-flex; border:2.5px solid var(--ink); border-radius:14px; overflow:hidden; box-shadow:3px 3px 0 var(--ink)}
+.seg button{border:0; background:var(--surface); padding:8px 16px; font-family:var(--display); font-weight:600; font-size:16px}
+.seg button+button{border-left:2.5px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--surface)}
+.board{display:grid; grid-template-columns:1fr auto 1fr; gap:26px; align-items:center; margin:24px 0 10px; min-height:260px}
+.col{display:grid; gap:16px; justify-items:center}
+.ent{position:relative; display:flex; align-items:center; gap:10px; background:var(--surface); border:2.5px solid var(--ink); border-radius:14px; padding:10px 14px; box-shadow:3px 3px 0 var(--ink); font-weight:800; min-width:150px}
+.ent .e{font-size:26px}
+.sticky{position:absolute; top:-18px; right:-26px; background:#FFE66D; color:#1D2045; font-family:var(--mono); font-size:12.5px; font-weight:600; padding:6px 9px; border-radius:3px; box-shadow:2px 3px 0 rgba(0,0,0,.25); transform:rotate(6deg); animation:stick .45s cubic-bezier(.3,1.7,.5,1) both; white-space:nowrap; z-index:2}
+.sticky.bad{background:#FFB3B3; max-width:180px; white-space:normal}
+@keyframes stick{from{opacity:0; transform:rotate(30deg) scale(.2)}to{opacity:1; transform:rotate(6deg)}}
+.register{background:var(--mn-soft); border:2.5px solid var(--ink); border-radius:14px; padding:10px; box-shadow:3px 3px 0 var(--ink); font-family:var(--mono); font-size:13px; animation:pop .5s cubic-bezier(.3,1.6,.5,1) both}
+.register b{font-family:var(--display); font-size:16px; display:block; margin-bottom:4px}
+.register div{padding:2px 0}
+.verdict{border-radius:14px; padding:14px 18px; font-weight:700; display:none}
+.verdict.ok{display:block; background:var(--good-soft); color:var(--good)}
+.verdict.no{display:block; background:var(--bad-soft); color:var(--bad)}
+
+/* L4 decoder */
+.decoder{background:var(--code-bg); color:var(--code-ink); border:2.5px solid var(--ink); border-radius:18px; box-shadow:var(--shadow); padding:24px; font-family:var(--mono); font-size:clamp(14px,2.2vw,21px); overflow-x:auto; white-space:nowrap; text-align:center}
+.pc{display:inline-block; cursor:pointer; padding:4px 8px; border-radius:10px; border:2.5px dashed #6A72AE; margin:3px 1px; transition:transform .15s, background .15s}
+.pc:hover{transform:translateY(-3px)}
+.pc.on{background:var(--pink); border-color:#fff; color:#fff; transform:translateY(-3px) rotate(-2deg)}
+.pc.seen::after{content:" ✓"; font-size:.7em; color:#7CF2B5}
+.dec-out{display:grid; grid-template-columns:auto minmax(0,1fr); gap:18px; align-items:center; margin-top:20px}
+.dec-out .em{font-size:60px; width:96px; height:96px; display:grid; place-items:center; background:var(--pink-soft); border:2.5px solid var(--ink); border-radius:24px}
+.dec-out h3{font-family:var(--mono); font-size:19px; margin-bottom:4px}
+.dec-out p{margin:0}
+.phone{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:22px}
+.phone .card{text-align:center}
+.phone .em{font-size:52px; line-height:1.2}
+.phone h3 code{font-size:1em}
+
+.conveyor{position:relative; margin:26px 0 8px; padding-top:6px}
+.belt{position:absolute; left:6%; right:6%; top:50px; height:14px; border-radius:7px; background:repeating-linear-gradient(90deg,var(--ink) 0 14px,var(--surface2) 14px 28px); border:2px solid var(--ink)}
+.belt.run{animation:belt .5s linear infinite}
+@keyframes belt{to{background-position:28px 0}}
+.stations{position:relative; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px}
+.st{display:flex; flex-direction:column; align-items:center; gap:6px; background:none; border:0; text-align:center}
+.st .bub{width:100px; height:100px; border-radius:50%; background:var(--surface); border:2.5px solid var(--ink); box-shadow:3px 3px 0 var(--ink); display:grid; place-items:center; font-size:42px; transition:transform .2s, background .2s}
+.st.on .bub{background:var(--many); transform:scale(1.1) rotate(-6deg)}
+.st b{font-family:var(--display); font-size:17px; font-weight:600}
+.st span{font-size:13.5px; color:var(--muted); max-width:16ch}
+.pipe-out{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:18px; margin-top:16px}
+
+pre.code{position:relative; margin:0; background:var(--code-bg); color:var(--code-ink); border:2.5px solid var(--ink); border-radius:16px; padding:18px 20px; font-family:var(--mono); font-size:13.5px; line-height:1.6; overflow-x:auto; box-shadow:var(--shadow)}
+pre.code .k{color:#FF9DD0} pre.code .s{color:#A5F0A9} pre.code .d{color:#FFD36E} pre.code .t{color:#82DCFF} pre.code .n{color:#FFAA70} pre.code .c{color:var(--code-muted); font-style:italic}
+.copy{position:absolute; top:8px; right:8px; font-size:12px; padding:3px 10px; border-radius:8px; border:1.5px solid #4A5190; background:#2A2F63; color:#D9DDFB; font-family:var(--body); font-weight:700}
+
+/* L5 playground */
+.howto{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-bottom:24px}
+.howto .card{display:flex; gap:16px; align-items:center}
+.howto .em{font-size:44px}
+.howto h3{font-size:20px}
+.howto p{margin:2px 0 0}
+.play{display:grid; grid-template-columns:270px minmax(0,1fr); gap:22px}
+.ops{display:grid; gap:10px; align-content:start}
+.op{display:flex; gap:12px; align-items:center; text-align:left; border:2.5px solid var(--ink); border-radius:16px; background:var(--surface); padding:10px 12px; box-shadow:3px 3px 0 var(--ink)}
+.op .e{font-size:28px}
+.op b{display:block; font-family:var(--display); font-weight:600; font-size:16.5px}
+.op small{color:var(--muted); font-size:13.5px; font-weight:600}
+.op[aria-selected="true"]{background:var(--many-soft); transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--ink)}
+.pmain{display:grid; gap:14px; min-width:0}
+.result{display:none; gap:14px; align-items:flex-start}
+.result.show{display:flex; animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.result .who{font-size:44px; line-height:1}
+.result .speech{flex:1}
+.result.err .speech{background:var(--bad-soft)}
+.result.ok .speech{background:var(--good-soft)}
+.db{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; margin-top:24px}
+.db .tbox h4 small{margin-left:auto; font-family:var(--body); font-size:12.5px; color:var(--muted); font-weight:700}
+.db .empty{padding:14px; color:var(--muted); font-size:14px; text-align:center}
+tr.fresh td{animation:fresh 1.8s ease}
+@keyframes fresh{0%{background:var(--good-soft)}100%{background:transparent}}
+
+/* L6 */
+.meals{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-bottom:24px}
+.meal{display:flex; gap:16px; align-items:center}
+.meal .tray{font-size:40px; letter-spacing:2px; white-space:nowrap}
+.meal h3{font-family:var(--mono); font-size:20px}
+.meal p{margin:2px 0 0}
+.qb{display:grid; grid-template-columns:290px minmax(0,1fr); gap:22px}
+.tree{list-style:none; margin:0; padding:0; font-family:var(--mono); font-size:14.5px}
+.tree ul{list-style:none; margin:2px 0 2px 10px; padding-left:16px; border-left:2.5px dotted var(--line)}
+.tree label{display:inline-flex; gap:8px; align-items:center; padding:3px 0; cursor:pointer}
+.tree input{width:18px; height:18px; accent-color:var(--mn)}
+.tree .rel{color:var(--mn); font-weight:600}
+.tree input:disabled+span{opacity:.35}
+.qwarn{margin-top:12px; font-weight:700; color:var(--pink); min-height:1.4em}
+.viewtabs{margin-bottom:12px}
+.vis{background:var(--surface2); border:2.5px solid var(--ink); border-radius:18px; padding:18px; min-height:220px}
+.scard{background:var(--surface); border:2.5px solid var(--ink); border-radius:16px; padding:14px; animation:pop .4s cubic-bezier(.3,1.6,.5,1) both}
+.scard .shead{display:flex; gap:12px; align-items:center}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{font-family:var(--mono); font-size:12.5px; padding:3px 9px; border-radius:999px; background:var(--surface2); border:1.5px solid var(--line)}
+.chip.k{border-color:var(--ink)}
+.subbox{margin-top:12px; padding:10px 12px; border-radius:12px; border:2px dashed var(--line)}
+.subbox h4{font-size:15px; margin-bottom:6px}
+.enr{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px}
+.enr>div{background:var(--mn-soft); border-radius:12px; padding:8px 10px; font-size:13.5px}
+.nullbox{text-align:center; padding:30px 10px; font-family:var(--display); font-size:22px}
+.nullbox .em{font-size:56px; display:block}
+.people{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:18px}
+.person{text-align:center; padding:14px 10px; border:2.5px solid var(--ink); border-radius:18px; background:var(--surface); transition:transform .25s, opacity .25s, background .25s}
+.person.yes{background:var(--good-soft); transform:translateY(-6px); box-shadow:var(--shadow)}
+.person.no{opacity:.45; filter:grayscale(.7)}
+.person b{display:block; font-family:var(--display); font-size:19px; font-weight:600}
+.person .chips{justify-content:center; margin-top:6px}
+.chip.hot{background:var(--mn); color:#fff; border-color:var(--mn)}
+.ops3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:16px}
+.ops3>div{border:2.5px solid var(--ink); border-radius:14px; padding:12px; background:var(--surface); display:flex; gap:10px; align-items:center; font-size:15px}
+.ops3 .e{font-size:28px}
+
+/* L7 boss */
+.boss{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; align-items:start}
+.bosscode{background:var(--code-bg); color:var(--code-ink); border:2.5px solid var(--ink); border-radius:18px; box-shadow:var(--shadow); padding:20px; font-family:var(--mono); font-size:14.5px; line-height:2; white-space:pre; overflow-x:auto}
+.bosscode select{font-family:var(--mono); font-size:14px; padding:2px 6px; border-radius:8px; border:2px dashed var(--many); background:#2A2F63; color:#FFD36E; font-weight:600}
+.bosscode select.ok{border:2px solid #55DA95; color:#A5F0A9}
+.bosscode select.no{border:2px solid #FF7D80; color:#FF9D9F}
+.monster{font-size:80px; text-align:center; line-height:1; transition:transform .3s}
+.monster.hit{animation:shake .4s}
+.monster.dead{transform:rotate(90deg) scale(.6); opacity:.4}
+.hp{height:18px; border:2.5px solid var(--ink); border-radius:999px; overflow:hidden; background:var(--surface2); margin:12px 0}
+.hp i{display:block; height:100%; background:var(--bad); width:100%; transition:width .4s}
+.hints{list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; font-weight:600}
+.hints li.y{color:var(--good)} .hints li.n{color:var(--bad)}
+details{border:2.5px solid var(--ink); border-radius:14px; padding:10px 14px; background:var(--surface); margin-top:10px}
+summary{cursor:pointer; font-weight:800}
+details p{margin:6px 0 2px; color:var(--muted)}
+
+/* recap */
+.take{border:2.5px solid var(--ink); border-radius:20px; padding:20px; box-shadow:var(--shadow)}
+.take .em{font-size:44px}
+.take h3{font-size:21px; margin:6px 0}
+.take p{margin:0}
+.quiz{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:24px}
+.qz{background:var(--surface); border:2.5px solid var(--ink); border-radius:18px; padding:16px; box-shadow:3px 3px 0 var(--ink)}
+.qz p{margin:0 0 10px; font-weight:800}
+.qz .ch{display:grid; gap:8px}
+.qz button{text-align:left; border:2px solid var(--line); background:var(--surface2); border-radius:12px; padding:8px 12px; font-weight:600}
+.qz button.right{border-color:var(--good); background:var(--good-soft); color:var(--good)}
+.qz button.wrong{border-color:var(--bad); background:var(--bad-soft); color:var(--bad)}
+.qz .why{display:none; margin-top:8px; font-size:15px; color:var(--muted)}
+.qz.done .why{display:block}
+.final{margin-top:24px; text-align:center; display:none}
+.final.show{display:block; animation:pop .6s cubic-bezier(.3,1.6,.5,1)}
+.final .trophy{font-size:84px}
+.final h3{font-size:30px}
+
+.toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,140%); z-index:50; background:var(--ink); color:var(--surface); font-weight:800; padding:10px 20px; border-radius:999px; transition:transform .3s cubic-bezier(.3,1.6,.5,1); pointer-events:none; white-space:nowrap}
+.toast.show{transform:translate(-50%,0)}
+.confetti{position:fixed; top:-20px; width:10px; height:16px; z-index:60; pointer-events:none; border-radius:2px; animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+footer{text-align:center; color:var(--muted); padding:30px 18px; font-weight:600}
+
+@media (max-width:920px){
+  .g2,.g3,.game,.pipe-out,.play,.qb,.boss,.quiz,.howto,.meals,.phone{grid-template-columns:minmax(0,1fr)}
+  .boxes{grid-template-columns:minmax(0,1fr)}
+  .db{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .people{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stations{grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:20px}
+  .belt{display:none}
+  .ops3{grid-template-columns:minmax(0,1fr)}
+  .brand{display:none}
+}
+@media (max-width:600px){
+  .board{grid-template-columns:minmax(0,1fr); gap:30px}
+  .db{grid-template-columns:minmax(0,1fr)}
+  .lvl-badge{width:58px; height:58px; font-size:28px}
+  .nav{justify-content:flex-start}
+}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important; transition:none!important; scroll-behavior:auto!important} .draw{stroke-dashoffset:0} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#top">🔗 Prisma Relations</a>
+    <nav class="nav" aria-label="Levels">
+      <a href="#l1">1 Messy</a><a href="#l2">2 Shapes</a><a href="#l3">3 Sticky note</a><a href="#l4">4 Decode</a><a href="#l5">5 Build</a><a href="#l6">6 Fetch</a><a href="#l7">7 Boss</a><a href="#l8">Recap</a>
+    </nav>
+    <div class="xp" id="xp" title="Earn XP by playing with the page"><span class="star">⭐</span><span id="xpN">0</span> XP</div>
+  </div>
+  <div class="bar"><i id="bar"></i></div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <h1><span class="w">How</span> <span class="w" style="animation-delay:.08s">tables</span> <span class="w" style="animation-delay:.16s">become</span> <span class="w" style="animation-delay:.24s">friends</span></h1>
+  <p class="sub">Lecture 15: relations in Prisma. Meet Rahul, a student at our college. Tap anything in his world to see what it is.</p>
+
+  <div class="card scene-wrap">
+    <div class="scene-scroll"><svg class="scene" id="scene" viewBox="0 0 960 420" role="img" aria-label="Rahul connected to his profile, enrollments, courses and lessons"></svg></div>
+    <div class="cap" id="cap" aria-live="polite"><span class="em">👆</span><span>Tap Rahul, his ID card, a clipboard, a book or a page.</span></div>
+  </div>
+  <div class="legend">
+    <span class="pill"><i style="background:var(--one)"></i>one-to-one</span>
+    <span class="pill"><i style="background:var(--many)"></i>one-to-many</span>
+    <span class="pill"><i style="background:var(--mn)"></i>many-to-many</span>
+  </div>
+</div>
+
+<!-- L1 -->
+<section id="l1">
+  <div class="lvl"><div class="lvl-badge">📓</div><div><small>Level 1</small><h2>The messy notebook</h2><p>Why not just keep everything in one big table?</p></div></div>
+  <div class="g2">
+    <div>
+      <div class="notebook">
+        <table class="nb" id="nb"><thead><tr><th>Student ID</th><th>Name</th><th>Course</th></tr></thead><tbody></tbody></table>
+      </div>
+      <label class="field">✏️ Rahul changed his name. Type his new name:
+        <input type="text" id="rename" placeholder="Rahul Sharma" autocomplete="off">
+      </label>
+      <div class="big-count" id="cnt">Rows to fix: <b>0</b></div>
+    </div>
+    <div>
+      <div class="say">
+        <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true" id="rahulFace"></svg>
+        <div class="speech"><p>“My name is written <b>three times</b>! If someone forgets to update one row, the app thinks there are two of me. 😵”</p></div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:21px;margin-bottom:8px">The problems</h3>
+        <p style="margin:0">🔁 Rahul’s details repeat on every row.<br>✏️ One rename means editing many rows.<br>➕ Every new course copies Rahul again.<br>📅 No place for enrollment info like date or status.</p>
+        <div class="row" style="margin-top:16px"><button class="btn" id="clean">🧹 Clean it up!</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="boxes" id="boxes" hidden></div>
+  <div class="tip" id="cleanTip" hidden><p><b class="h">✨ Better:</b> each thing gets its own table, and tables point at each other using IDs. Now a rename changes <b>one row</b>. Those pointing IDs are called <b>foreign keys</b>.</p></div>
+</section>
+
+<!-- L2 -->
+<section id="l2">
+  <div class="lvl"><div class="lvl-badge">🧩</div><div><small>Level 2</small><h2>Three shapes of friendship</h2><p>Every relationship is one of these. Quick revision from DBMS.</p></div></div>
+  <div class="g3" id="shapes"></div>
+  <div class="row" style="justify-content:center;margin-top:18px"><button class="btn alt" id="replay">🔄 Replay the drawings</button></div>
+
+  <div class="game">
+    <div class="card" style="display:flex;flex-direction:column;justify-content:center">
+      <div class="muted" style="text-align:center;font-weight:800" id="gCount">Mini game: sort the scenario</div>
+      <div class="scen" id="scen"></div>
+      <div class="dots" id="dots"></div>
+      <div class="gfb" id="gfb" aria-live="polite"></div>
+    </div>
+    <div class="buckets" id="buckets">
+      <button class="bucket" data-b="1:1"><span class="e">🪪</span>One-to-one</button>
+      <button class="bucket" data-b="1:N"><span class="e">📚</span>One-to-many</button>
+      <button class="bucket" data-b="M:N"><span class="e">🕸️</span>Many-to-many</button>
+      <button class="btn alt" id="gNext" hidden>Next scenario ➜</button>
+    </div>
+  </div>
+</section>
+
+<!-- L3 -->
+<section id="l3">
+  <div class="lvl"><div class="lvl-badge">📝</div><div><small>Level 3</small><h2>Where does the sticky note go?</h2><p>A foreign key is like a sticky note that says “I belong to #1”. Which table should carry it?</p></div></div>
+  <div class="card">
+    <div class="seg" id="stMode"><button aria-pressed="true" data-m="1n">📚 Course &amp; lessons</button><button aria-pressed="false" data-m="mn">🧑‍🎓 Students &amp; courses</button></div>
+    <div class="board" id="board"></div>
+    <div class="row" id="stBtns" style="justify-content:center"></div>
+    <div class="verdict" id="verdict" style="margin-top:16px"></div>
+  </div>
+</section>
+
+<!-- L4 -->
+<section id="l4">
+  <div class="lvl"><div class="lvl-badge">🔍</div><div><small>Level 4</small><h2>Decode the Prisma line</h2><p>This one line in the Profile model connects it to Student. Tap every piece to decode it.</p></div></div>
+  <div class="decoder" id="decoder">
+    <span class="pc" data-p="name">student</span> <span class="pc" data-p="model">Student</span> <span class="pc" data-p="rel">@relation</span>(<span class="pc" data-p="fields">fields: [studentId]</span>, <span class="pc" data-p="refs">references: [id]</span>)
+  </div>
+  <div class="card dec-out" style="margin-top:20px"><div class="em" id="decEm">❓</div><div><h3 id="decH">Tap a piece above</h3><p id="decP">Each one has a job. Decode all five to earn XP.</p></div></div>
+
+  <h3 style="font-size:26px;margin-top:40px">Wait, why both <code>studentId</code> and <code>student</code>?</h3>
+  <p class="muted" style="margin:6px 0 0">Think of a friend’s phone number versus actually calling them.</p>
+  <div class="phone">
+    <div class="card"><div class="em">📇</div><h3><code>studentId Int</code></h3><p style="margin:6px auto 0">The <b>phone number</b> written in your contacts. Just a number, like <code>1</code>. It’s a real column stored in PostgreSQL.</p></div>
+    <div class="card"><div class="em">📞</div><h3><code>student Student</code></h3><p style="margin:6px auto 0"><b>Calling</b> that number to reach the whole person: name, email, everything. It’s a Prisma relation field. No column exists for it.</p></div>
+  </div>
+  <div class="tip"><p><b class="h">🧠 Remember:</b> <code>fields</code> = the foreign key on <b>this</b> model. <code>references</code> = the field on the <b>other</b> model. For one-to-one, add <code>@unique</code> on the foreign key so two profiles can’t point at the same student.</p></div>
+
+  <h3 style="font-size:26px;margin-top:40px">The schema factory</h3>
+  <p class="muted" style="margin:6px 0 0">How your schema becomes a real database. Press play, or tap any station.</p>
+  <div class="conveyor">
+    <div class="belt" id="belt"></div>
+    <div class="stations" id="stations">
+      <button class="st" data-s="0"><span class="bub">📝</span><b>Prisma schema</b><span>You describe models</span></button>
+      <button class="st" data-s="1"><span class="bub">⚙️</span><b>Migration</b><span>Turned into SQL</span></button>
+      <button class="st" data-s="2"><span class="bub">🐘</span><b>PostgreSQL</b><span>Tables and rules enforced</span></button>
+      <button class="st" data-s="3"><span class="bub">✨</span><b>Prisma Client</b><span>Use it from JavaScript</span></button>
+    </div>
+  </div>
+  <div class="row" style="justify-content:center"><button class="btn mn" id="runPipe">▶ Run the factory</button></div>
+  <div class="pipe-out"><div class="card" id="pipeTxt"></div><pre class="code" id="pipeCode"></pre></div>
+</section>
+
+<!-- L5 -->
+<section id="l5">
+  <div class="lvl"><div class="lvl-badge">🏗️</div><div><small>Level 5</small><h2>Build the database</h2><p>Run real Prisma writes on an empty database. Watch the tables fill. Then try to break things.</p></div></div>
+  <div class="howto">
+    <div class="card"><div class="em">🆕</div><div><h3><code>create</code> = make a new friend</h3><p>Creates a brand-new related record. Prisma fills the foreign key for you.</p></div></div>
+    <div class="card"><div class="em">🏷️</div><div><h3><code>connect</code> = tag an existing friend</h3><p>Links a record that already exists, found by a unique field. If it doesn’t exist, it fails.</p></div></div>
+  </div>
+  <div class="play">
+    <div class="ops" id="ops"></div>
+    <div class="pmain">
+      <div id="opExtra"></div>
+      <pre class="code" id="opCode"></pre>
+      <div class="row"><button class="btn" id="run">▶ Run query</button><button class="btn alt" id="reset">🗑️ Reset database</button></div>
+      <div class="result" id="result"><div class="who" id="who"></div><div class="speech"><p id="say"></p></div></div>
+    </div>
+  </div>
+  <div class="db" id="db"></div>
+  <div class="tip"><p><b class="h">🎯 Challenges:</b> run step 4 twice (duplicate!), pick course XYZ999 in step 4 (doesn’t exist!), and run step 5 to see <code>onDelete: Cascade</code> clean up lessons. Nested writes are all-or-nothing: if anything fails, nothing is saved.</p></div>
+</section>
+
+<!-- L6 -->
+<section id="l6">
+  <div class="lvl"><div class="lvl-badge">🍔</div><div><small>Level 6</small><h2>Fetch related data</h2><p>Ordering data from the database is like ordering food.</p></div></div>
+  <div class="meals">
+    <div class="card meal"><div class="tray">🍔🍟</div><div><h3>include</h3><p>The <b>combo meal</b>. You get every normal field of the student, plus the extras you add.</p></div></div>
+    <div class="card meal"><div class="tray">🍟</div><div><h3>select</h3><p><b>Pick exactly what you want.</b> Only the fields you tick come back. Less data, faster pages.</p></div></div>
+  </div>
+  <div class="card qb">
+    <div>
+      <label class="field" style="margin-top:0">Who are we fetching?
+        <select id="qbId"><option value="1">🧑‍🎓 Rahul (id 1)</option><option value="2">👩‍🎓 Priya (id 2)</option><option value="3">🧑 Aman (id 3, no profile)</option><option value="4">👩 Neha (id 4, no courses)</option><option value="99">👻 id 99 (doesn’t exist)</option></select>
+      </label>
+      <div style="margin:16px 0 10px"><div class="seg" id="qbMode"><button aria-pressed="true" data-m="include">🍔 include</button><button aria-pressed="false" data-m="select">🍟 select</button></div></div>
+      <ul class="tree" id="tree"></ul>
+      <div class="qwarn" id="qwarn"></div>
+    </div>
+    <div style="min-width:0">
+      <div class="seg viewtabs" id="vt"><button aria-pressed="true" data-v="pic">🖼️ Picture</button><button aria-pressed="false" data-v="json">{ } JSON</button><button aria-pressed="false" data-v="code">⌨️ Query</button></div>
+      <div id="qOut"></div>
+    </div>
+  </div>
+  <div class="tip"><p><b class="h">⚠️ Two rules:</b> you can’t use <code>include</code> and <code>select</code> together at the same level. And one Prisma query in your code may still run several SQL queries behind the scenes.</p></div>
+
+  <h3 style="font-size:26px;margin-top:40px">🔎 Filter by friends: <code>some</code>, <code>every</code>, <code>none</code></h3>
+  <p class="muted" style="margin:6px 0 14px">Your Lecture 14 filters work on relations too. Who matches?</p>
+  <div class="card">
+    <div class="row" style="font-family:var(--display);font-size:20px;font-weight:600;gap:10px">
+      Students with
+      <select id="fOp"><option value="some">at least one (some)</option><option value="every">all (every)</option><option value="none">no (none)</option></select>
+      enrollments in
+      <select id="fCode"><option>BE101</option><option>DB101</option><option>AI101</option></select>
+    </div>
+    <div class="people" id="people"></div>
+    <p id="fNote" style="margin:16px 0 0;font-weight:700;color:var(--pink)"></p>
+    <details><summary>Show the Prisma query</summary><pre class="code" id="fCodeOut" style="margin-top:10px;box-shadow:none"></pre></details>
+    <div class="ops3">
+      <div><span class="e">🙋</span><span><code>some</code>: at least one matches</span></div>
+      <div><span class="e">💯</span><span><code>every</code>: all of them match</span></div>
+      <div><span class="e">🙅</span><span><code>none</code>: not a single one matches</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- L7 -->
+<section id="l7">
+  <div class="lvl"><div class="lvl-badge">👾</div><div><small>Level 7</small><h2>Boss fight: the frontend query</h2><p>The profile page needs Rahul’s name and email, plus the title and code of every course he’s in. Nothing extra. Pick the right word for each blank.</p></div></div>
+  <div class="boss">
+    <div class="bosscode" id="bossCode"></div>
+    <div class="card">
+      <div class="monster" id="monster">👾</div>
+      <div class="hp"><i id="hp"></i></div>
+      <div class="row" style="justify-content:center"><button class="btn" id="attack">⚔️ Check my query</button></div>
+      <ul class="hints" id="hints"></ul>
+      <details><summary>Why select instead of include?</summary><p>So the response has only what the frontend needs.</p></details>
+      <details><summary>Why go through enrollments to reach course?</summary><p>Student connects to Course through Enrollment. There’s no direct link.</p></details>
+      <details><summary>Where do the actual foreign keys live?</summary><p>On Enrollment: <code>studentId</code> and <code>courseId</code>.</p></details>
+      <details><summary>What if the student doesn’t exist, or has no courses?</summary><p>You get <code>null</code> for a missing student, and an empty <code>enrollments</code> array for no courses.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- Recap -->
+<section id="l8">
+  <div class="lvl"><div class="lvl-badge">🏆</div><div><small>Recap</small><h2>Three things to remember</h2><p>Then a quick exit quiz to lock it in.</p></div></div>
+  <div class="g3">
+    <div class="take" style="background:var(--one-soft)"><div class="em">🐘</div><h3>PostgreSQL is the referee</h3><p>It enforces foreign keys, unique rules and primary keys. Prisma models describe what your app works with.</p></div>
+    <div class="take" style="background:var(--many-soft)"><div class="em">🔗</div><h3>@relation is the link</h3><p><code>@relation</code> says how models connect. Fields like <code>studentId</code> hold the actual foreign keys.</p></div>
+    <div class="take" style="background:var(--mn-soft)"><div class="em">🧭</div><h3>Prisma Client navigates</h3><p><code>create</code> new friends, <code>connect</code> existing ones, and fetch nested data with <code>include</code> and <code>select</code>.</p></div>
+  </div>
+  <div class="quiz" id="quiz"></div>
+  <div class="final" id="final"><div class="trophy">🏆</div><h3 id="finalH"></h3><p class="muted" id="finalP" style="margin:6px auto 0"></p></div>
+
+  <div class="card" style="margin-top:30px">
+    <h3 style="font-size:22px">🤫 Bonus: the lazy many-to-many</h3>
+    <p>We built <code>Enrollment</code> ourselves because we wanted extra info like <code>status</code>. If you need no extra info, Prisma can make the junction table for you:</p>
+    <pre class="code" data-hl>model Student {
+  id      Int      @id @default(autoincrement())
+  courses Course[]
+}
+
+model Course {
+  id       Int       @id @default(autoincrement())
+  students Student[]
+}
+// Prisma quietly creates a _CourseToStudent table</pre>
+  </div>
+</section>
+</main>
+<footer>Advanced Software Development, Lecture 15. Made for playing, not just reading. 🎮</footer>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- XP + fun ---------- */
+let xp=0; const got=new Set();
+function award(key,pts,msg){
+  if(got.has(key)) return; got.add(key); xp+=pts;
+  $("#xpN").textContent=xp; const x=$("#xp"); x.classList.remove("bump"); void x.offsetWidth; x.classList.add("bump");
+  toast("+"+pts+" XP  "+msg);
+}
+let tt; function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("show"),1900); }
+function confetti(){
+  if(reduce) return;
+  const cols=["#10A08F","#F2A20C","#8B5CF6","#EC4899","#3B82F6","#22C55E"];
+  for(let i=0;i<70;i++){ const c=document.createElement("i"); c.className="confetti";
+    c.style.left=Math.random()*100+"vw"; c.style.background=cols[i%cols.length];
+    c.style.animationDuration=(1.6+Math.random()*1.6)+"s"; c.style.animationDelay=(Math.random()*.4)+"s";
+    document.body.appendChild(c); setTimeout(()=>c.remove(),3800); }
+}
+
+/* ---------- code highlight ---------- */
+const RE=/(\/\/.*$|--\s.*$)|("(?:[^"\\\n]|\\.)*")|(@@?\w+)|\b(const|await|true|false|null|model|CREATE|TABLE|ALTER|ADD|CONSTRAINT|FOREIGN|KEY|REFERENCES|PRIMARY|UNIQUE|INDEX|ON|DELETE|UPDATE|CASCADE|RESTRICT|NOT|NULL|SERIAL|INTEGER|TEXT|npx)\b|\b(Int|String|DateTime|Boolean)\b|\b(\d+)\b/gm;
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const hl=src=>esc(src).replace(RE,(m,c,s,d,k,t,n)=>c?`<span class="c">${c}</span>`:s?`<span class="s">${s}</span>`:d?`<span class="d">${d}</span>`:k?`<span class="k">${k}</span>`:t?`<span class="t">${t}</span>`:n?`<span class="n">${n}</span>`:m);
+function setCode(el,src){
+  el.innerHTML=hl(src); el.dataset.raw=src;
+  const b=document.createElement("button"); b.className="copy"; b.type="button"; b.textContent="Copy";
+  b.onclick=async()=>{ try{ await navigator.clipboard.writeText(el.dataset.raw); b.textContent="Copied!"; }catch(e){ b.textContent="Select to copy"; } setTimeout(()=>b.textContent="Copy",1400); };
+  el.appendChild(b);
+}
+$$("pre[data-hl]").forEach(p=>setCode(p,p.textContent));
+
+/* ---------- scroll ---------- */
+const links=$$(".nav a"), secs=links.map(a=>$(a.getAttribute("href")));
+function onScroll(){ const h=document.documentElement, max=h.scrollHeight-h.clientHeight;
+  $("#bar").style.width=(max>0?h.scrollTop/max*100:0)+"%";
+  let cur=-1; secs.forEach((s,i)=>{ if(s.getBoundingClientRect().top<160) cur=i; });
+  links.forEach((a,i)=>a.classList.toggle("on",i===cur)); }
+addEventListener("scroll",onScroll,{passive:true}); onScroll();
+
+/* ---------- drawings ---------- */
+function face(skin,hair,shirt,bg){
+  return `<circle cx="32" cy="32" r="31" fill="${bg}" stroke="var(--ink)" stroke-width="2.5"/>
+  <path d="M12 58c2-11 10-16 20-16s18 5 20 16a31 31 0 0 1-40 0z" fill="${shirt}"/>
+  <circle cx="32" cy="28" r="12" fill="${skin}"/>
+  <path d="M20 27c0-9 6-14 12-14s12 5 12 14c-3-5-7-7-12-7s-9 2-12 7z" fill="${hair}"/>
+  <circle cx="27.5" cy="29.5" r="1.7" fill="#1D2045"/><circle cx="36.5" cy="29.5" r="1.7" fill="#1D2045"/>
+  <path d="M28 34q4 3.2 8 0" stroke="#1D2045" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+}
+const PEOPLE={
+  Rahul:["#F0BE95","#2B2340","#3B82F6","#DCE8FF"],
+  Priya:["#C98E62","#1A1A2E","#EC4899","#FFE1EF"],
+  Aman:["#E2A877","#4A2F1F","#10A08F","#D6F5EF"],
+  Neha:["#F5CBA7","#6B3A1F","#F2A20C","#FFF1CC"]
+};
+const av=(n,size)=>`<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">${face(...PEOPLE[n])}</svg>`;
+$("#rahulFace").innerHTML=face(...PEOPLE.Rahul);
+
+/* ---------- hero scene ---------- */
+const CAPS={
+  rahul:["🧑‍🎓","<b>Rahul</b> is one row in the <b>Student</b> table: id 1, name, email. Everything else here points back to him."],
+  priya:["👩‍🎓","<b>Priya</b> also takes Backend. Many students per course, many courses per student: that’s <b>many-to-many</b>."],
+  profile:["🪪","Rahul’s <b>Profile</b>. Exactly one per student, so it’s <b>one-to-one</b>. It carries a sticky note: <code>studentId = 1</code>."],
+  enroll:["📋","An <b>Enrollment</b> is one line in the class register: “student 1 joined course 1”. It holds <b>both IDs</b> plus date and status."],
+  course:["📚","A <b>Course</b>. It has many lessons and many enrolled students."],
+  lesson:["📄","A <b>Lesson</b>. Each lesson belongs to one course, so it stores <code>courseId</code>. That’s <b>one-to-many</b>."]
+};
+function g(x,y,inner,key,delay){ return `<g transform="translate(${x},${y})"><g class="pop node" data-k="${key}" style="animation-delay:${delay}s" tabindex="0" role="button">${inner}</g></g>`; }
+function bookG(color,code,name){ return `<rect class="ring" x="-42" y="-48" width="84" height="96" rx="12"/><rect x="-32" y="-38" width="64" height="76" rx="6" fill="${color}" stroke="var(--ink)" stroke-width="2.5"/><rect x="-32" y="-38" width="10" height="76" rx="3" fill="rgba(0,0,0,.2)"/><rect x="-16" y="-24" width="40" height="16" rx="3" fill="#fff"/><text class="tiny" x="4" y="-12" text-anchor="middle">${code}</text><text class="nm" y="62" text-anchor="middle">${name}</text>`; }
+function clipG(){ return `<rect class="ring" x="-32" y="-38" width="64" height="76" rx="12"/><rect x="-22" y="-27" width="44" height="56" rx="6" fill="var(--mn-soft)" stroke="var(--ink)" stroke-width="2.5"/><rect x="-10" y="-32" width="20" height="10" rx="3" fill="var(--mn)" stroke="var(--ink)" stroke-width="2"/><path d="M-12 -8h24M-12 2h24M-12 12h14" stroke="var(--mn)" stroke-width="3" stroke-linecap="round"/>`; }
+function pageG(){ return `<rect class="ring" x="-24" y="-30" width="48" height="60" rx="10"/><path d="M-15 -20h20l10 10v30h-30z" fill="#fff" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/><path d="M-9 -4h18M-9 4h18M-9 12h12" stroke="var(--many)" stroke-width="2.5" stroke-linecap="round"/>`; }
+function idG(){ return `<rect class="ring" x="-76" y="-52" width="152" height="104" rx="16"/><rect x="-66" y="-42" width="132" height="84" rx="12" fill="var(--one-soft)" stroke="var(--ink)" stroke-width="2.5"/><g transform="translate(-58,-30) scale(.75)">${face(...PEOPLE.Rahul)}</g><path d="M2 -18h50M2 -4h40M2 10h46" stroke="var(--one)" stroke-width="4" stroke-linecap="round"/><text class="nm" y="70" text-anchor="middle">Profile</text>`; }
+function personG(n,s){ return `<circle class="ring" r="${36*s}"/><g transform="translate(${-32*s},${-32*s}) scale(${s})">${face(...PEOPLE[n])}</g><text class="nm" y="${34*s+20}" text-anchor="middle">${n}</text>`; }
+function tag(x,y,w,txt,c){ return `<g class="tag" transform="translate(${x},${y})"><g class="pop" style="animation-delay:1.3s"><rect x="${-w/2}" y="-14" width="${w}" height="28" rx="14" fill="${c}"/><text text-anchor="middle" y="5" style="fill:#fff">${txt}</text></g></g>`; }
+(function scene(){
+  let s="";
+  const L=(d,c,delay)=>`<path class="flow pop" style="animation-delay:${delay}s" d="${d}" stroke="${c}"/>`;
+  s+=L("M181,170 L282,170","var(--one)",.9);
+  [[80,.95],[180,1],[280,1.05]].forEach(([y,dl])=>s+=L(`M378,170 C450,170 450,${y} 518,${y}`,"var(--mn)",dl));
+  s+=L("M372,350 C450,350 450,365 518,365","var(--mn)",1.1);
+  s+=L("M562,80 L700,85","var(--mn)",1.15); s+=L("M562,180 L700,205","var(--mn)",1.15); s+=L("M562,280 L700,325","var(--mn)",1.15);
+  s+=L("M562,365 C640,365 630,95 700,92","var(--mn)",1.2);
+  [[45,1.25],[105,1.3],[165,1.35]].forEach(([y,dl])=>s+=L(`M776,85 C830,85 830,${y} 868,${y}`,"var(--many)",dl));
+  s+=g(110,170,idG(),"profile",.1);
+  s+=g(330,170,personG("Rahul",1.45),"rahul",0);
+  s+=g(330,345,personG("Priya",1),"priya",.2);
+  [[80,.4],[180,.45],[280,.5],[365,.55]].forEach(([y,d])=>s+=g(540,y,clipG(),"enroll",d));
+  s+=g(738,85,bookG("#3B82F6","BE101","Backend"),"course",.65);
+  s+=g(738,205,bookG("#10A08F","DB101","DBMS"),"course",.7);
+  s+=g(738,325,bookG("#EC4899","AI101","AI"),"course",.75);
+  [[45,.85],[105,.9],[165,.95]].forEach(([y,d])=>s+=g(895,y,pageG(),"lesson",d));
+  s+=`<text class="nm pop" style="animation-delay:1s" x="540" y="22" text-anchor="middle">Enrollment</text>`;
+  s+=`<text class="nm pop" style="animation-delay:1s" x="895" y="212" text-anchor="middle">Lessons</text>`;
+  s+=tag(232,138,70,"1 : 1","var(--one)");
+  s+=tag(630,22,136,"many : many","var(--mn)");
+  s+=tag(860,250,96,"1 : many","var(--many)");
+  $("#scene").innerHTML=s;
+  $$("#scene .node").forEach(n=>{
+    const pick=()=>{ $$("#scene .node").forEach(x=>x.classList.toggle("hl",x.dataset.k===n.dataset.k));
+      const c=CAPS[n.dataset.k]; $("#cap").innerHTML=`<span class="em">${c[0]}</span><span>${c[1]}</span>`; award("scene-"+n.dataset.k,5,"Explorer"); };
+    n.addEventListener("click",pick); n.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();} });
+  });
+})();
+
+/* ---------- L1 ---------- */
+const FLAT=[[1,"Rahul","Backend"],[1,"Rahul","DBMS"],[1,"Rahul","AI"],[2,"Priya","Backend"]];
+function nb(){ const v=$("#rename").value.trim();
+  $("#nb tbody").innerHTML=FLAT.map(r=>`<tr class="${r[0]===1?"dup":""}"><td class="mono">${r[0]}</td><td class="n">${r[0]===1&&v?esc(v):r[1]}</td><td>${r[2]}</td></tr>`).join("");
+  $("#cnt b").textContent=v?3:0; if(v) award("rename",10,"Spotted the repeat"); }
+$("#rename").addEventListener("input",nb); nb();
+$("#clean").addEventListener("click",()=>{
+  const v=esc($("#rename").value.trim()||"Rahul");
+  $("#boxes").hidden=false; $("#cleanTip").hidden=false;
+  $("#boxes").innerHTML=`
+   <div class="tbox drop" style="background:var(--surface)"><h4 style="background:#DCE8FF;color:#1D2045">🧑‍🎓 Student</h4><table><tr><th>id</th><th>name</th></tr><tr><td>1</td><td>${v}</td></tr><tr><td>2</td><td>Priya</td></tr></table></div>
+   <div class="tbox drop" style="animation-delay:.15s"><h4 style="background:var(--mn-soft)">📋 Enrollment</h4><table><tr><th>studentId</th><th>courseId</th></tr><tr><td>1</td><td>1</td></tr><tr><td>1</td><td>2</td></tr><tr><td>1</td><td>3</td></tr><tr><td>2</td><td>1</td></tr></table></div>
+   <div class="tbox drop" style="animation-delay:.3s"><h4 style="background:var(--many-soft)">📚 Course</h4><table><tr><th>id</th><th>title</th></tr><tr><td>1</td><td>Backend</td></tr><tr><td>2</td><td>DBMS</td></tr><tr><td>3</td><td>AI</td></tr></table></div>`;
+  $("#clean").textContent="✨ Cleaned!"; $("#clean").disabled=true; confetti(); award("clean",15,"Data tidier");
+});
+
+/* ---------- L2 shapes ---------- */
+function circ(x,y,emo,c){ return `<circle cx="${x}" cy="${y}" r="20" fill="var(--surface)" stroke="${c}" stroke-width="3"/><text x="${x}" y="${y+7}" text-anchor="middle" font-size="20">${emo}</text>`; }
+function curve(x1,y1,x2,y2,c,d){ const m=(x1+x2)/2; return `<path class="draw" pathLength="1" style="animation-delay:${d}s" d="M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}" stroke="${c}"/>`; }
+const SH=[
+  {c:"var(--one)",h:"One-to-one",like:"Like you and your college ID card 🪪",txt:"One student has one profile. One profile belongs to one student.",fk:"Profile.studentId  @unique",
+   art:()=>{let s="";[45,105,165].forEach((y,i)=>{s+=curve(82,y,218,y,"var(--one)",i*.2);});[45,105,165].forEach(y=>{s+=circ(60,y,"🧑‍🎓","var(--one)")+circ(240,y,"🪪","var(--one)");});return s;}},
+  {c:"var(--many)",h:"One-to-many",like:"Like a book and its chapters 📖",txt:"One course has many lessons. Each lesson belongs to one course.",fk:"Lesson.courseId  (on the many side)",
+   art:()=>{let s="";[45,105,165].forEach((y,i)=>{s+=curve(82,105,218,y,"var(--many)",i*.2);});s+=circ(60,105,"📚","var(--many)");[45,105,165].forEach(y=>s+=circ(240,y,"📄","var(--many)"));return s;}},
+  {c:"var(--mn)",h:"Many-to-many",like:"Like students and clubs, with a sign-up register 📋",txt:"A student takes many courses. A course has many students. A junction table sits in the middle.",fk:"Enrollment.studentId + courseId",
+   art:()=>{let s="";const L=[[45,40],[45,85],[105,130],[165,85],[45,175]],R=[45,105,165],C=[[0,0],[1,1],[2,0],[3,1],[4,2]];
+     L.forEach(([sy,my],i)=>{ s+=curve(80,sy,140,my,"var(--mn)",i*.12); s+=curve(160,my,220,R[C[i][1]],"var(--mn)",.4+i*.12); });
+     [45,105,165].forEach(y=>s+=circ(60,y,"🧑‍🎓","var(--mn)")); R.forEach(y=>s+=circ(240,y,"📚","var(--mn)"));
+     L.forEach(([,my])=>s+=`<rect x="140" y="${my-9}" width="20" height="18" rx="4" fill="var(--mn)" stroke="var(--ink)" stroke-width="1.5"/>`); return s;}}
+];
+$("#shapes").innerHTML=SH.map(x=>`<div class="fcard"><div class="art" style="background:${x.c}22"><svg viewBox="0 0 300 210" aria-hidden="true">${x.art()}</svg></div><div class="bd"><h3 style="color:${x.c}">${x.h}</h3><div class="like">${x.like}</div><div class="muted">${x.txt}</div><div class="keybox">🔑 ${x.fk}</div></div></div>`).join("");
+const shapeObs=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("play"); } }),{threshold:.4});
+$$("#shapes .fcard").forEach(c=>shapeObs.observe(c));
+$("#replay").addEventListener("click",()=>{ $$("#shapes .fcard").forEach(c=>{ c.classList.remove("play"); void c.offsetWidth; c.classList.add("play"); }); });
+
+/* sort game */
+const GAME=[
+  ["🛂","Each person has one passport.","1:1","One passport per person, one person per passport."],
+  ["📺","A YouTube channel has many videos. Each video is on one channel.","1:N","The video stores channelId: the many side."],
+  ["⚽","Students join many clubs. Clubs have many students.","M:N","You need a membership register in the middle."],
+  ["📚","A course has many lessons.","1:N","Lesson stores courseId."],
+  ["🛒","A customer places many orders. Each order has one customer.","1:N","Order stores customerId."],
+  ["🏷️","Posts have many tags. Tags appear on many posts.","M:N","A PostTag junction table holds both IDs."],
+  ["🪪","Each employee has exactly one ID badge.","1:1","Badge stores employeeId with @unique."],
+  ["🎬","Movies have many actors. Actors are in many movies.","M:N","A Cast junction table links them, and can store the role played."]
+];
+let gi=0, gScore=0, res=[];
+function gShow(){
+  const s=$("#scen"); s.classList.remove("in"); void s.offsetWidth; s.classList.add("in");
+  if(gi>=GAME.length){ s.innerHTML=`<span class="em">${gScore>=7?"🏆":gScore>=5?"🎉":"💪"}</span>You got ${gScore} of ${GAME.length}!`; $("#gCount").textContent="Game over"; $("#gfb").innerHTML=`<button class="btn alt" id="again">🔁 Play again</button>`; $("#again").onclick=()=>{gi=0;gScore=0;res=[];gShow();}; $$(".bucket").forEach(b=>b.disabled=true); $("#gNext").hidden=true; if(gScore>=6){confetti();} award("game",25,"Shape sorter"); dotsDraw(); return; }
+  s.innerHTML=`<span class="em">${GAME[gi][0]}</span>${GAME[gi][1]}`;
+  $("#gCount").textContent=`Mini game: scenario ${gi+1} of ${GAME.length}`; $("#gfb").textContent=""; $("#gNext").hidden=true;
+  $$(".bucket").forEach(b=>{ b.disabled=false; b.classList.remove("right","wrong"); }); dotsDraw();
+}
+function dotsDraw(){ $("#dots").innerHTML=GAME.map((_,i)=>`<i class="${res[i]===true?"ok":res[i]===false?"no":i===gi?"cur":""}"></i>`).join(""); }
+$$(".bucket").forEach(b=>b.addEventListener("click",()=>{
+  const q=GAME[gi], ok=b.dataset.b===q[2]; res[gi]=ok; if(ok) gScore++;
+  $$(".bucket").forEach(x=>{ x.disabled=true; if(x.dataset.b===q[2]) x.classList.add("right"); });
+  if(!ok) b.classList.add("wrong");
+  $("#gfb").innerHTML=(ok?"✅ Yes! ":"❌ Not quite. ")+q[3];
+  $("#gNext").hidden=false; dotsDraw();
+}));
+$("#gNext").addEventListener("click",()=>{ gi++; gShow(); });
+gShow();
+
+/* ---------- L3 sticky notes ---------- */
+let stMode="1n";
+const ST={
+  "1n":{left:[["📚","Backend","course"]], right:[["📄","Intro to APIs","l1"],["📄","Relations","l2"],["📄","Prisma Queries","l3"]],
+    btns:[["c","📌 Put the note on Course"],["l","📌 Put the note on each Lesson"]],
+    res:{c:{notes:{course:["bad","lessonIds: 1, 2, 3, 4, 5, 6, 7, 8… 😱"]},ok:false,msg:"❌ A course can have 50 lessons. One column can’t hold a growing list. Messy!"},
+         l:{notes:{l1:["","courseId: 1"],l2:["","courseId: 1"],l3:["","courseId: 1"]},ok:true,msg:"✅ Perfect! Each lesson holds one simple note. Rule: the foreign key goes on the many side."}}},
+  "mn":{left:[["🧑‍🎓","Rahul","s1"],["👩‍🎓","Priya","s2"]], right:[["📚","Backend","c1"],["📚","DBMS","c2"],["📚","AI","c3"]],
+    btns:[["s","📌 Note on Student"],["c","📌 Note on Course"],["r","📋 Add a register in the middle"]],
+    res:{s:{notes:{s1:["bad","courseId: 1? 2? 3? 🤯"]},ok:false,msg:"❌ Rahul takes 3 courses. One courseId column can’t hold three values."},
+         c:{notes:{c1:["bad","studentId: 1? 2? …300? 🤯"]},ok:false,msg:"❌ Backend has hundreds of students. One studentId column can’t hold them all."},
+         r:{notes:{},reg:true,ok:true,msg:"✅ That’s it! The Enrollment table holds one line per student-course pair, plus extras like date and status."}}}
+};
+function stDraw(choice){
+  const m=ST[stMode], r=choice?m.res[choice]:null, notes=r?r.notes:{};
+  const ent=([e,n,k])=>`<div class="ent"><span class="e">${e}</span>${n}${notes[k]?`<span class="sticky ${notes[k][0]}">${notes[k][1]}</span>`:""}</div>`;
+  const mid=r&&r.reg?`<div class="register"><b>📋 Enrollment</b><div>Rahul ➜ Backend</div><div>Rahul ➜ DBMS</div><div>Rahul ➜ AI</div><div>Priya ➜ Backend</div></div>`:`<div style="font-size:34px">${stMode==="1n"?"⟷":"⇄"}</div>`;
+  $("#board").innerHTML=`<div class="col">${m.left.map(ent).join("")}</div>${mid}<div class="col">${m.right.map(ent).join("")}</div>`;
+  $("#stBtns").innerHTML=m.btns.map(([k,t])=>`<button class="btn ${k===choice?"mn":"alt"}" data-c="${k}">${t}</button>`).join("");
+  $$("#stBtns button").forEach(b=>b.onclick=()=>stDraw(b.dataset.c));
+  const v=$("#verdict"); v.className="verdict"+(r?(r.ok?" ok":" no"):""); v.textContent=r?r.msg:"";
+  if(r&&r.ok){ award("sticky-"+stMode,15,"Foreign key finder"); }
+}
+$$("#stMode button").forEach(b=>b.addEventListener("click",()=>{ stMode=b.dataset.m; $$("#stMode button").forEach(x=>x.setAttribute("aria-pressed",x===b)); stDraw(); }));
+stDraw();
+
+/* ---------- L4 decoder ---------- */
+const DEC={
+  name:["🏷️","student","The relation field’s name. It’s the door you use in Prisma Client to walk from a Profile to its Student. Not a database column!"],
+  model:["🧑‍🎓","Student","The model on the other side. It tells Prisma what kind of record you’ll find through that door."],
+  rel:["🔗","@relation","“Here’s how these two connect.” Written on the model that carries the sticky note (the foreign key)."],
+  fields:["📝","fields: [studentId]","Which field on this model (Profile) is the sticky note. It holds the student’s id."],
+  refs:["🎯","references: [id]","Which field on the other model (Student) the note points at. Usually its id."]
+};
+const seen=new Set();
+$$("#decoder .pc").forEach(p=>{ p.tabIndex=0; p.setAttribute("role","button");
+  const go=()=>{ $$("#decoder .pc").forEach(x=>x.classList.toggle("on",x===p)); p.classList.add("seen"); seen.add(p.dataset.p);
+    const d=DEC[p.dataset.p]; $("#decEm").textContent=d[0]; $("#decH").textContent=d[1]; $("#decP").textContent=d[2];
+    const e=$("#decEm"); e.classList.remove("pop"); void e.offsetWidth; e.classList.add("pop");
+    if(seen.size===5){ award("decode",20,"Code breaker"); confetti(); } };
+  p.addEventListener("click",go); p.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();go();} });
+});
+
+const PIPE=[
+  [`<h3>📝 You write the schema</h3><p>Models, fields, and <code>@relation</code>. Nothing has touched the database yet. It’s just a plan.</p>`,
+`model Profile {
+  id        Int     @id @default(autoincrement())
+  bio       String?
+  studentId Int     @unique
+  student   Student @relation(fields: [studentId], references: [id])
+}`],
+  [`<h3>⚙️ Migration makes SQL</h3><p>Prisma turns your plan into SQL. Look closely: there’s a <code>studentId</code> column, a unique index, and a foreign key. There’s <b>no</b> <code>student</code> column!</p>`,
+`npx prisma migrate dev --name add_relations
+
+CREATE TABLE "Profile" (
+  "id" SERIAL NOT NULL,
+  "bio" TEXT,
+  "studentId" INTEGER NOT NULL,
+  CONSTRAINT "Profile_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "Profile_studentId_key" ON "Profile"("studentId");
+ALTER TABLE "Profile" ADD CONSTRAINT "Profile_studentId_fkey"
+  FOREIGN KEY ("studentId") REFERENCES "Student"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;`],
+  [`<h3>🐘 PostgreSQL guards the door</h3><p>The database checks every rule. Try to save a profile for a student who doesn’t exist, and it says no, whoever is asking.</p>`,
+`INSERT INTO "Profile" ("bio", "studentId")
+VALUES ('Ghost profile', 999);
+
+-- ERROR: insert or update on table "Profile"
+-- violates foreign key constraint "Profile_studentId_fkey"`],
+  [`<h3>✨ Prisma Client in your JS</h3><p>Generate the client and now you can walk across relations using normal JavaScript objects. Follow your project’s usual generate workflow.</p>`,
+`npx prisma generate
+
+const profile = await prisma.profile.findUnique({
+  where: { studentId: 1 },
+  include: { student: true },
+});`]
+];
+function station(i){ $$("#stations .st").forEach(s=>s.classList.toggle("on",+s.dataset.s===i)); $("#pipeTxt").innerHTML=PIPE[i][0]; setCode($("#pipeCode"),PIPE[i][1]); }
+$$("#stations .st").forEach(s=>s.addEventListener("click",()=>station(+s.dataset.s)));
+station(0);
+$("#runPipe").addEventListener("click",()=>{
+  const b=$("#runPipe"); b.disabled=true; $("#belt").classList.add("run");
+  [0,1,2,3].forEach(i=>setTimeout(()=>station(i),i*(reduce?0:1300)));
+  setTimeout(()=>{ b.disabled=false; $("#belt").classList.remove("run"); award("pipe",10,"Factory worker"); },reduce?10:4200);
+});
+
+/* ---------- L5 playground ---------- */
+let db,seq,fresh={};
+function resetDb(){ db={Student:[],Profile:[],Course:[],Lesson:[],Enrollment:[]}; seq={Student:0,Profile:0,Course:0,Lesson:0}; }
+resetDb();
+const COLS={Student:["id","name","email"],Profile:["id","bio","studentId"],Course:["id","title","code"],Lesson:["id","title","courseId"],Enrollment:["studentId","courseId","status"]};
+const ICON={Student:["🧑‍🎓","#DCE8FF"],Profile:["🪪","var(--one-soft)"],Course:["📚","var(--many-soft)"],Lesson:["📄","var(--surface2)"],Enrollment:["📋","var(--mn-soft)"]};
+function mark(t){ (fresh[t]=fresh[t]||new Set()).add(db[t].length-1); }
+function drawDb(){
+  $("#db").innerHTML=Object.keys(COLS).map(t=>{ const r=db[t];
+    const body=r.length?`<table><tr>${COLS[t].map(c=>`<th>${c}</th>`).join("")}</tr>${r.map((x,i)=>`<tr class="${fresh[t]&&fresh[t].has(i)?"fresh":""}">${COLS[t].map(c=>`<td>${esc(x[c])}</td>`).join("")}</tr>`).join("")}</table>`:`<div class="empty">Empty 🦗</div>`;
+    return `<div class="tbox"><h4 style="background:${ICON[t][1]};color:#1D2045">${ICON[t][0]} ${t}<small style="color:#596084">${r.length}</small></h4>${body}</div>`; }).join("");
+  fresh={};
+}
+class PErr extends Error{ constructor(c,m){ super(m); this.code=c; } }
+const MISSING="An operation failed because it depends on one or more records that were required but not found.";
+let enrollCode="BE101";
+const OPS=[
+ {e:"🧑‍🎓",n:"Rahul + profile",s:"1:1 nested create",
+  code:()=>`const student = await prisma.student.create({
+  data: {
+    name: "Rahul",
+    email: "rahul@example.com",
+    profile: {
+      create: { bio: "Backend developer" },
+    },
+  },
+  include: { profile: true },
+});`,
+  run:()=>{ if(db.Student.some(s=>s.email==="rahul@example.com")) throw new PErr("P2002","Unique constraint failed on the fields: (`email`)");
+    const s={id:++seq.Student,name:"Rahul",email:"rahul@example.com"}; db.Student.push(s); mark("Student");
+    db.Profile.push({id:++seq.Profile,bio:"Backend developer",studentId:s.id}); mark("Profile");
+    return "Made Rahul and his profile in one go. Notice: you never typed studentId. Prisma filled it in! 🪄"; }},
+ {e:"📚",n:"BE101 + 3 lessons",s:"1:N nested create",
+  code:()=>`const course = await prisma.course.create({
+  data: {
+    title: "Backend Development",
+    code: "BE101",
+    lessons: {
+      create: [
+        { title: "Introduction to APIs" },
+        { title: "Database Relationships" },
+        { title: "Prisma Queries" },
+      ],
+    },
+  },
+  include: { lessons: true },
+});`,
+  run:()=>{ if(db.Course.some(c=>c.code==="BE101")) throw new PErr("P2002","Unique constraint failed on the fields: (`code`)");
+    const c={id:++seq.Course,title:"Backend Development",code:"BE101"}; db.Course.push(c); mark("Course");
+    ["Introduction to APIs","Database Relationships","Prisma Queries"].forEach(t=>{ db.Lesson.push({id:++seq.Lesson,title:t,courseId:c.id}); mark("Lesson"); });
+    return "One course and three lessons. Each lesson got courseId automatically. 📄📄📄"; }},
+ {e:"📗",n:"DB101 course",s:"A second course",
+  code:()=>`const course = await prisma.course.create({
+  data: {
+    title: "Database Systems",
+    code: "DB101",
+  },
+});`,
+  run:()=>{ if(db.Course.some(c=>c.code==="DB101")) throw new PErr("P2002","Unique constraint failed on the fields: (`code`)");
+    db.Course.push({id:++seq.Course,title:"Database Systems",code:"DB101"}); mark("Course"); return "DB101 is ready to join. 📗"; }},
+ {e:"🏷️",n:"Enroll with connect",s:"M:N via Enrollment",extra:true,
+  code:()=>`const enrollment = await prisma.enrollment.create({
+  data: {
+    student: { connect: { id: 1 } },
+    course: { connect: { code: "${enrollCode}" } },
+  },
+  include: { student: true, course: true },
+});`,
+  run:()=>{ const s=db.Student.find(x=>x.id===1), c=db.Course.find(x=>x.code===enrollCode);
+    if(!s||!c) throw new PErr("P2025",MISSING+(!s?" No student with id 1 yet. Run step 1 first.":` No course with code ${enrollCode}.`));
+    if(db.Enrollment.some(e=>e.studentId===s.id&&e.courseId===c.id)) throw new PErr("P2002","Unique constraint failed on the fields: (`studentId`,`courseId`)");
+    db.Enrollment.push({studentId:s.id,courseId:c.id,status:"ACTIVE"}); mark("Enrollment");
+    return `Tagged existing Rahul and existing ${enrollCode}. No new student or course was made, just one register line. 📋`; }},
+ {e:"💥",n:"Delete BE101",s:"onDelete: Cascade",
+  code:()=>`const deleted = await prisma.course.delete({
+  where: { code: "BE101" },
+});
+// Lesson and Enrollment use onDelete: Cascade`,
+  run:()=>{ const c=db.Course.find(x=>x.code==="BE101"); if(!c) throw new PErr("P2025",MISSING+" No course with code BE101.");
+    const nl=db.Lesson.filter(l=>l.courseId===c.id).length, ne=db.Enrollment.filter(e=>e.courseId===c.id).length;
+    db.Course=db.Course.filter(x=>x!==c); db.Lesson=db.Lesson.filter(l=>l.courseId!==c.id); db.Enrollment=db.Enrollment.filter(e=>e.courseId!==c.id);
+    return `BE101 is gone, and the cascade swept away ${nl} lesson${nl===1?"":"s"} and ${ne} enrollment${ne===1?"":"s"} with it. 🧹`; }}
+];
+let oi=0;
+$("#ops").innerHTML=OPS.map((o,i)=>`<button class="op" data-i="${i}" aria-selected="${i===0}"><span class="e">${o.e}</span><span><b>${i+1}. ${o.n}</b><small>${o.s}</small></span></button>`).join("");
+function showOp(i){ oi=i; $$("#ops .op").forEach(b=>b.setAttribute("aria-selected",+b.dataset.i===i));
+  $("#opExtra").innerHTML=OPS[i].extra?`<label class="field" style="margin:0;max-width:280px">Which course to connect?<select id="eSel">${["BE101","DB101","XYZ999"].map(c=>`<option${c===enrollCode?" selected":""}>${c}</option>`).join("")}</select></label>`:"";
+  if(OPS[i].extra) $("#eSel").onchange=e=>{ enrollCode=e.target.value; setCode($("#opCode"),OPS[oi].code()); };
+  setCode($("#opCode"),OPS[i].code()); $("#result").className="result"; }
+$$("#ops .op").forEach(b=>b.addEventListener("click",()=>showOp(+b.dataset.i)));
+$("#run").addEventListener("click",()=>{
+  const r=$("#result"); r.className="result";
+  void r.offsetWidth;
+  try{ const msg=OPS[oi].run(); r.className="result show ok"; $("#who").textContent="✅"; $("#say").innerHTML=msg; award("op"+oi,10,"Builder"); }
+  catch(e){ r.className="result show err"; $("#who").textContent="🐘";
+    $("#say").innerHTML=`<b>PostgreSQL says no! (${e.code})</b><br>${esc(e.message)}<br><span style="font-weight:700">${e.code==="P2002"?"That’s the unique rule protecting you. Nothing was saved.":"connect needs a record that already exists. Nothing was saved."}</span>`;
+    award("err"+e.code,15,"Rule breaker caught"); }
+  drawDb();
+});
+$("#reset").addEventListener("click",()=>{ resetDb(); drawDb(); showOp(0); });
+showOp(0); drawDb();
+
+/* ---------- L6 query builder ---------- */
+const D={
+  students:[{id:1,name:"Rahul",email:"rahul@example.com"},{id:2,name:"Priya",email:"priya@example.com"},{id:3,name:"Aman",email:"aman@example.com"},{id:4,name:"Neha",email:"neha@example.com"}],
+  profiles:[{id:1,bio:"Backend developer",studentId:1},{id:2,bio:"Loves databases",studentId:2}],
+  courses:[{id:1,title:"Backend Development",code:"BE101"},{id:2,title:"Database Systems",code:"DB101"},{id:3,title:"Intro to AI",code:"AI101"}],
+  enr:[{studentId:1,courseId:1,enrolledAt:"2026-07-01T09:00:00.000Z",status:"ACTIVE"},{studentId:1,courseId:2,enrolledAt:"2026-07-03T09:00:00.000Z",status:"ACTIVE"},{studentId:1,courseId:3,enrolledAt:"2026-07-10T09:00:00.000Z",status:"COMPLETED"},{studentId:2,courseId:1,enrolledAt:"2026-07-02T09:00:00.000Z",status:"ACTIVE"},{studentId:3,courseId:2,enrolledAt:"2026-07-05T09:00:00.000Z",status:"DROPPED"}]
+};
+const qb={id:1,mode:"include",view:"pic",inc:{profile:true,enrollments:true,course:true},sel:{id:false,name:true,email:true,enrollments:true,status:false,enrolledAt:false,course:true,title:true,code:true}};
+function fmt(v,ind){ ind=ind||0; if(v===null||typeof v!=="object") return typeof v==="string"?`"${v}"`:String(v);
+  const p="  ".repeat(ind+1); return "{\n"+Object.entries(v).map(([k,x])=>p+k+": "+fmt(x,ind+1)+",").join("\n")+"\n"+"  ".repeat(ind)+"}"; }
+function tree(){
+  if(qb.mode==="include"){ const i=qb.inc;
+    return `<li><label><input type="checkbox" data-k="inc.profile" ${i.profile?"checked":""}><span class="rel">🪪 profile</span></label></li>
+     <li><label><input type="checkbox" data-k="inc.enrollments" ${i.enrollments?"checked":""}><span class="rel">📋 enrollments</span></label>
+      <ul><li><label><input type="checkbox" data-k="inc.course" ${i.course?"checked":""} ${i.enrollments?"":"disabled"}><span class="rel">📚 course</span></label></li></ul></li>
+     <li class="muted" style="font-family:var(--body);font-size:14px;margin-top:8px">🍔 id, name and email always come with include.</li>`; }
+  const s=qb.sel, cb=(k,l,dis,rel)=>`<label><input type="checkbox" data-k="sel.${k}" ${s[k]?"checked":""} ${dis?"disabled":""}><span class="${rel?"rel":""}">${l}</span></label>`;
+  return `<li>${cb("id","id")}</li><li>${cb("name","name")}</li><li>${cb("email","email")}</li>
+   <li>${cb("enrollments","📋 enrollments",0,1)}<ul><li>${cb("status","status",!s.enrollments)}</li><li>${cb("enrolledAt","enrolledAt",!s.enrollments)}</li>
+   <li>${cb("course","📚 course",!s.enrollments,1)}<ul><li>${cb("title","title",!s.enrollments||!s.course)}</li><li>${cb("code","code",!s.enrollments||!s.course)}</li></ul></li></ul></li>`;
+}
+function pic(r){
+  if(r===null) return `<div class="vis"><div class="nullbox"><span class="em">👻</span>null<br><span class="muted" style="font-size:16px;font-family:var(--body)">No student with that id. findUnique gives back null.</span></div></div>`;
+  const st=D.students.find(x=>x.id===qb.id);
+  const scal=["id","name","email"].filter(k=>k in r).map(k=>`<span class="chip k">${k}: ${esc(r[k])}</span>`).join("");
+  let h=`<div class="vis"><div class="scard"><div class="shead">${av(st.name,54)}<div class="chips">${scal||'<span class="chip">no scalar fields picked</span>'}</div></div>`;
+  if("profile" in r) h+=`<div class="subbox"><h4>🪪 profile</h4>${r.profile?`<div class="chips">${Object.entries(r.profile).map(([k,v])=>`<span class="chip">${k}: ${esc(v)}</span>`).join("")}</div>`:`<span class="chip">null (no profile)</span>`}</div>`;
+  if("enrollments" in r) h+=`<div class="subbox"><h4>📋 enrollments [${r.enrollments.length}]</h4>${r.enrollments.length?`<div class="enr">${r.enrollments.map(e=>{
+      const c=e.course; const rest=Object.entries(e).filter(([k])=>k!=="course").map(([k,v])=>`<div class="mono" style="font-size:12px">${k}: ${esc(k==="enrolledAt"?String(v).slice(0,10):v)}</div>`).join("");
+      return `<div>${c?`<b>📚 ${esc(c.title||"")}</b>${c.code?` <span class="mono">${c.code}</span>`:""}${c.id?`<div class="mono" style="font-size:12px">id: ${c.id}</div>`:""}`:""}${rest}</div>`; }).join("")}</div>`:`<span class="chip">[ ] empty array</span>`}</div>`;
+  return h+`</div></div>`;
+}
+function buildQB(){
+  $("#tree").innerHTML=tree();
+  $$("#tree input").forEach(i=>i.onchange=()=>{ const [g,k]=i.dataset.k.split("."); qb[g][k]=i.checked; buildQB(); award("qb",10,"Query chef"); });
+  const args={where:{id:qb.id}}, st=D.students.find(x=>x.id===qb.id);
+  const enrOf=id=>D.enr.filter(e=>e.studentId===id), cOf=e=>D.courses.find(c=>c.id===e.courseId);
+  let r=null, warn="";
+  if(qb.mode==="include"){ const i=qb.inc, inc={};
+    if(i.profile) inc.profile=true; if(i.enrollments) inc.enrollments=i.course?{include:{course:true}}:true;
+    if(Object.keys(inc).length) args.include=inc; else warn="No extras: you just get the student’s own fields.";
+    if(st){ r={...st}; if(i.profile) r.profile=D.profiles.find(p=>p.studentId===st.id)||null;
+      if(i.enrollments) r.enrollments=enrOf(st.id).map(e=>i.course?{...e,course:cOf(e)}:{...e}); }
+  } else { const s=qb.sel, sel={};
+    if(s.id) sel.id=true; if(s.name) sel.name=true; if(s.email) sel.email=true;
+    if(s.enrollments){ const es={}; if(s.status) es.status=true; if(s.enrolledAt) es.enrolledAt=true;
+      if(s.course){ const cs={}; if(s.title) cs.title=true; if(s.code) cs.code=true; es.course=Object.keys(cs).length?{select:cs}:true; }
+      sel.enrollments=Object.keys(es).length?{select:es}:true; }
+    if(!Object.keys(sel).length){ warn="Pick at least one field! An empty select isn’t allowed."; sel.name=true; }
+    args.select=sel;
+    if(st){ r={}; if(sel.id) r.id=st.id; if(sel.name) r.name=st.name; if(sel.email) r.email=st.email;
+      if(sel.enrollments) r.enrollments=enrOf(st.id).map(e=>{ if(sel.enrollments===true) return {...e};
+        const o={}, es=sel.enrollments.select, c=cOf(e); if(es.status) o.status=e.status; if(es.enrolledAt) o.enrolledAt=e.enrolledAt;
+        if(es.course){ if(es.course===true) o.course={...c}; else { o.course={}; if(es.course.select.title) o.course.title=c.title; if(es.course.select.code) o.course.code=c.code; } }
+        return o; }); }
+  }
+  if(st&&st.id===4&&r.enrollments) warn="Neha has no courses, so enrollments is an empty array [ ], not null.";
+  if(st&&st.id===3&&r&&("profile" in r)) warn="Aman has no profile, so profile is null.";
+  $("#qwarn").textContent=warn?"💡 "+warn:"";
+  const out=$("#qOut");
+  if(qb.view==="pic") out.innerHTML=pic(r);
+  else { out.innerHTML=`<pre class="code"></pre>`; setCode($("pre",out), qb.view==="json"?JSON.stringify(r,null,2):"const student = await prisma.student.findUnique("+fmt(args)+");"); }
+}
+$("#qbId").onchange=e=>{ qb.id=+e.target.value; buildQB(); };
+$$("#qbMode button").forEach(b=>b.onclick=()=>{ qb.mode=b.dataset.m; $$("#qbMode button").forEach(x=>x.setAttribute("aria-pressed",x===b)); buildQB(); if(qb.mode==="select") award("sel",10,"À la carte"); });
+$$("#vt button").forEach(b=>b.onclick=()=>{ qb.view=b.dataset.v; $$("#vt button").forEach(x=>x.setAttribute("aria-pressed",x===b)); buildQB(); });
+buildQB();
+
+/* filters */
+function filt(){
+  const op=$("#fOp").value, code=$("#fCode").value;
+  setCode($("#fCodeOut"),`const students = await prisma.student.findMany({
+  where: {
+    enrollments: {
+      ${op}: {
+        course: { code: "${code}" },
+      },
+    },
+  },
+  select: { id: true, name: true },
+});`);
+  let vac=false;
+  $("#people").innerHTML=D.students.map(s=>{
+    const cs=D.enr.filter(e=>e.studentId===s.id).map(e=>D.courses.find(c=>c.id===e.courseId).code);
+    const ok=op==="some"?cs.includes(code):op==="every"?cs.every(c=>c===code):!cs.includes(code);
+    if(ok&&op==="every"&&!cs.length) vac=true;
+    return `<div class="person ${ok?"yes":"no"}">${av(s.name,60)}<b>${s.name} ${ok?"✅":""}</b><div class="chips">${cs.length?cs.map(c=>`<span class="chip ${c===code?"hot":""}">${c}</span>`).join(""):'<span class="chip">no courses</span>'}</div></div>`;
+  }).join("");
+  $("#fNote").textContent=vac?`🤔 Why does Neha match? She has zero courses, so “all of her courses are ${code}” is technically true. Sneaky! Combine every with some if you need at least one.`:"";
+}
+$("#fOp").onchange=()=>{ filt(); award("filt",10,"Filter wizard"); }; $("#fCode").onchange=filt; filt();
+
+/* ---------- L7 boss ---------- */
+const BL=[
+  {id:"b1",opts:["include","select","where"],a:"select",hint:"Top level: we only want some fields, so not the combo meal."},
+  {id:"b2",opts:["courses","enrollments","course"],a:"enrollments",hint:"Student has no direct courses field. Go through the register first."},
+  {id:"b3",opts:["course","courses","lessons"],a:"course",hint:"Each enrollment points at one course (singular)."},
+  {id:"b4",opts:["include","select"],a:"select",hint:"Inside course we want only title and code."}
+];
+const sel=b=>`<select id="${b.id}" aria-label="blank"><option value="">❓ pick</option>${b.opts.map(o=>`<option>${o}</option>`).join("")}</select>`;
+$("#bossCode").innerHTML=`<span style="color:#FF9DD0">const</span> student = <span style="color:#FF9DD0">await</span> prisma.student.findUnique({
+  where: { id: <span style="color:#FFAA70">1</span> },
+  ${sel(BL[0])}: {
+    name: <span style="color:#FF9DD0">true</span>,
+    email: <span style="color:#FF9DD0">true</span>,
+    ${sel(BL[1])}: {
+      select: {
+        ${sel(BL[2])}: {
+          ${sel(BL[3])}: {
+            title: <span style="color:#FF9DD0">true</span>,
+            code: <span style="color:#FF9DD0">true</span>,
+          },
+        },
+      },
+    },
+  },
+});`;
+$("#attack").addEventListener("click",()=>{
+  let n=0; const hs=[];
+  BL.forEach(b=>{ const s=$("#"+b.id), ok=s.value===b.a; s.classList.toggle("ok",ok); s.classList.toggle("no",!ok); if(ok) n++; else hs.push(b.hint); });
+  $("#hp").style.width=(100-n*25)+"%";
+  const m=$("#monster"); m.classList.remove("hit"); void m.offsetWidth;
+  if(n===4){ m.classList.add("dead"); m.textContent="💀"; $("#hints").innerHTML=`<li class="y">🎉 Boss defeated! That’s exactly the query the frontend needs.</li>`; confetti(); award("boss",40,"Boss slayer"); }
+  else { m.classList.add("hit"); $("#hints").innerHTML=`<li class="${n?"y":"n"}">⚔️ ${n} of 4 hits landed.</li>`+hs.map(h=>`<li class="n">💡 ${h}</li>`).join(""); }
+});
+
+/* ---------- quiz ---------- */
+const QZ=[
+  ["In a one-to-many relationship, where does the foreign key usually go?",["On the one side","On the many side","In a junction table"],1,"Each lesson stores its courseId: the many side carries the sticky note."],
+  ["What does connect do in a nested write?",["Makes a new record","Links an existing record by a unique field","Deletes the old link"],1,"Tag an existing friend. If they don’t exist, it fails."],
+  ["Which option brings related records along with all the normal fields?",["include","where","take"],0,"include is the combo meal."],
+  ["What makes Profile ↔ Student one-to-one instead of one-to-many?",["@id on Profile","@unique on studentId","The ? on profile"],1,"Without @unique, many profiles could point at one student."],
+  ["Does enrollments Enrollment[] create an array column in PostgreSQL?",["Yes","No, it’s only a Prisma relation field"],1,"The real link is studentId stored on each Enrollment row."],
+  ["Why does Enrollment use @@id([studentId, courseId])?",["Faster queries","Stops the same student joining the same course twice","Prisma needs it on every model"],1,"The pair is the primary key, so duplicates get blocked."]
+];
+let qa=0,qc=0;
+$("#quiz").innerHTML=QZ.map((q,i)=>`<div class="qz" data-i="${i}"><p>${i+1}. ${q[0]}</p><div class="ch">${q[1].map((o,j)=>`<button data-j="${j}">${o}</button>`).join("")}</div><div class="why">${q[3]}</div></div>`).join("");
+$$("#quiz .qz").forEach(c=>{ const q=QZ[+c.dataset.i];
+  $$("button",c).forEach(b=>b.onclick=()=>{ if(c.classList.contains("done")) return; c.classList.add("done");
+    $$("button",c)[q[2]].classList.add("right"); if(+b.dataset.j!==q[2]) b.classList.add("wrong"); else { qc++; award("q"+c.dataset.i,10,"Correct!"); }
+    if(++qa===QZ.length){ const f=$("#final"); f.classList.add("show");
+      $("#finalH").textContent=qc===QZ.length?"Perfect score! Relations master 🧙":qc>=4?`${qc} of ${QZ.length}. Nice work!`:`${qc} of ${QZ.length}. Keep going!`;
+      $("#finalP").textContent=`You collected ${xp} XP on this page. ${qc<QZ.length?"Review the red answers, then replay the levels.":"You’re ready for the next lecture."}`;
+      if(qc>=4) confetti(); }
+  }); });
+})();
+</script>
+</body>
+</html>
